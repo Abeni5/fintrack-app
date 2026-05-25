@@ -1,9 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from routes.transactions import router as transactions_router
 
-from routes import health
-
-app = FastAPI(title="FinTrack API", version="0.1.0")
+app = FastAPI(
+    title="FinTrack API",
+    description="Personal finance tracking — USD + ETB, AI advisor",
+    version="0.1.0"
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -13,9 +16,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(health.router)
-
+app.include_router(
+    transactions_router,
+    prefix="/transactions",
+    tags=["transactions"]
+)
 
 @app.get("/")
 def root():
-    return {"message": "FinTrack API"}
+    return {
+        "app": "FinTrack API",
+        "version": "0.1.0",
+        "status": "running"
+    }
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
