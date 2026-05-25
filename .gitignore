@@ -1,0 +1,15 @@
+# Python
+backend/venv/
+__pycache__/
+*.py[cod]
+.env
+
+# Node / React Native
+frontend/node_modules/
+frontend/.expo/
+frontend/dist/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
