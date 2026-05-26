@@ -4,13 +4,14 @@ from dotenv import load_dotenv
 from routes.transactions import router as transactions_router
 from routes.auth import router as auth_router
 from routes.reports import router as reports_router
+from routes.currency import router as currency_router
 
 load_dotenv()
 
 app = FastAPI(
     title="FinTrack API",
     description="Personal finance — USD + ETB, AI advisor",
-    version="0.3.0"
+    version="0.4.0"
 )
 
 app.add_middleware(
@@ -24,10 +25,11 @@ app.add_middleware(
 app.include_router(auth_router, prefix="/auth", tags=["Auth"])
 app.include_router(transactions_router, prefix="/transactions", tags=["Transactions"])
 app.include_router(reports_router, prefix="/reports", tags=["Reports"])
+app.include_router(currency_router, prefix="/currency", tags=["Currency"])
 
 @app.get("/")
 def root():
-    return {"app": "FinTrack API", "version": "0.3.0", "status": "running"}
+    return {"app": "FinTrack API", "version": "0.4.0", "status": "running"}
 
 @app.get("/health")
 def health():
