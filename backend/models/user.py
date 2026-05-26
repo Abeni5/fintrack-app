@@ -16,3 +16,8 @@ class UserOut(BaseModel):
     name: str
     email: str
     default_currency: str
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserOut
