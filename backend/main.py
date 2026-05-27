@@ -6,7 +6,7 @@ from routes.auth import router as auth_router
 from routes.reports import router as reports_router
 from routes.currency import router as currency_router
 from routes.advisor import router as advisor_router
-
+from routes.budget import router as budget_router
 load_dotenv()
 
 app = FastAPI(
@@ -42,6 +42,10 @@ app.include_router(currency_router,
 app.include_router(advisor_router,
                    prefix="/advisor",
                    tags=["AI Advisor"])
+
+app.include_router(budget_router,
+                   prefix="/budget",
+                   tags=["Budget & Goals"])
 
 
 @app.get("/")
