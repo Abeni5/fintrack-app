@@ -13,11 +13,13 @@ import AddTransactionScreen from './src/screens/AddTransactionScreen';
 import ReportsScreen from './src/screens/ReportsScreen';
 import AdvisorScreen from './src/screens/AdvisorScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import CurrencyScreen from './src/screens/CurrencyScreen';
+import BudgetScreen from './src/screens/BudgetScreen';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
-const ICONS = { Dashboard:'🏠', Transactions:'💸', Reports:'📊', Advisor:'🧠', Settings:'⚙️' };
+const ICONS = { Dashboard:'🏠', Transactions:'💸', Reports:'📊', Advisor:'🧠', Currency:'💱', Budget:'🎯', Settings:'⚙️' };
 
 function MainTabs() {
   return (
@@ -32,6 +34,8 @@ function MainTabs() {
       <Tab.Screen name="Transactions" component={TransactionsScreen} />
       <Tab.Screen name="Reports" component={ReportsScreen} />
       <Tab.Screen name="Advisor" component={AdvisorScreen} />
+      <Tab.Screen name="Currency" component={CurrencyScreen} />
+      <Tab.Screen name="Budget" component={BudgetScreen} />
       <Tab.Screen name="Settings" component={SettingsScreen} />
     </Tab.Navigator>
   );
