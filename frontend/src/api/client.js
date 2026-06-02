@@ -1,7 +1,7 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const BASE_URL = 'http://192.168.1.8:8000';
+const BASE_URL = 'https://fintrack-app-full.onrender.com';
 
 const api = axios.create({
   baseURL: BASE_URL,
