@@ -55,6 +55,7 @@ export default function TransactionsScreen({ navigation }) {
   const renderItem = ({ item }) => (
     <TouchableOpacity
       style={s.item}
+      onPress={() => navigation.navigate('EditTransaction', { transaction: item })}
       onLongPress={() => deleteTransaction(item.id)}
     >
       <View style={[s.typeBar, { backgroundColor: TYPE_COLORS[item.type] }]} />

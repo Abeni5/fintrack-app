@@ -15,6 +15,7 @@ import AdvisorScreen from './src/screens/AdvisorScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import CurrencyScreen from './src/screens/CurrencyScreen';
 import BudgetScreen from './src/screens/BudgetScreen';
+import EditTransactionScreen from './src/screens/EditTransactionScreen';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -53,6 +54,7 @@ function RootNavigator() {
         <Stack.Screen name='AddTransaction' component={AddTransactionScreen} />
         <Stack.Screen name='Currency' component={CurrencyScreen} />
         <Stack.Screen name='Budget' component={BudgetScreen} />
+        <Stack.Screen name='EditTransaction' component={EditTransactionScreen} />
       </Stack.Navigator>
     );
   }
