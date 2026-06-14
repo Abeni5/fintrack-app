@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, RefreshControl, KeyboardAvoidingView, Platform } from 'react-native';
+import { useTheme } from '../theme/ThemeContext';
 import api from '../api/client';
 
 export default function AdvisorScreen() {
+  const { colors } = useTheme();
   const [tab, setTab] = useState('suggestions');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -32,41 +34,32 @@ export default function AdvisorScreen() {
     finally { setChatLoading(false); }
   };
 
-  const AICard = ({ advice }) => (
-    <View style={s.aiCard}>
-      <Text style={s.aiLabel}>🧠 AI Advisor</Text>
-      <Text style={s.aiText}>{advice}</Text>
-    </View>
-  );
-
   const renderContent = () => {
     if (tab === 'chat') {
       return (
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          <Text style={s.chatTitle}>Ask your financial advisor anything</Text>
+          <Text style={[s.chatTitle, { color: colors.textSecondary }]}>Ask your financial advisor anything</Text>
           {chatReply ? (
-            <View style={s.aiCard}>
-              <Text style={s.aiLabel}>🧠 AI Advisor</Text>
-              <Text style={s.aiText}>{chatReply}</Text>
+            <View style={[s.aiCard, { backgroundColor: colors.card, borderColor: colors.primary + '33' }]}>
+              <Text style={[s.aiLabel, { color: colors.primary }]}>🧠 AI Advisor</Text>
+              <Text style={[s.aiText, { color: colors.text }]}>{chatReply}</Text>
             </View>
           ) : null}
           <View style={s.chatRow}>
             <TextInput
-              style={s.chatInput}
+              style={[s.chatInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
               placeholder="Ask anything about your finances..."
-              placeholderTextColor="#888"
-              value={chatMsg}
-              onChangeText={setChatMsg}
-              multiline
+              placeholderTextColor={colors.textSecondary}
+              value={chatMsg} onChangeText={setChatMsg} multiline
             />
-            <TouchableOpacity style={s.sendBtn} onPress={sendChat} disabled={chatLoading}>
+            <TouchableOpacity style={[s.sendBtn, { backgroundColor: colors.primary }]} onPress={sendChat} disabled={chatLoading}>
               {chatLoading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.sendText}>→</Text>}
             </TouchableOpacity>
           </View>
           <View style={s.suggestions}>
             {['How can I save more?', 'Am I overspending?', 'What is my biggest expense?'].map((q, i) => (
-              <TouchableOpacity key={i} style={s.suggBtn} onPress={() => setChatMsg(q)}>
-                <Text style={s.suggText}>{q}</Text>
+              <TouchableOpacity key={i} style={[s.suggBtn, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => setChatMsg(q)}>
+                <Text style={[s.suggText, { color: colors.textSecondary }]}>{q}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -74,38 +67,41 @@ export default function AdvisorScreen() {
       );
     }
 
-    if (loading) return <ActivityIndicator size="large" color="#378ADD" style={{ marginTop: 60 }} />;
-    if (!data) return <Text style={s.empty}>No data available</Text>;
+    if (loading) return <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 60 }} />;
+    if (!data) return <Text style={[s.empty, { color: colors.textSecondary }]}>No data available</Text>;
 
     return (
       <View>
-        {data.ai_advice && <AICard advice={data.ai_advice} />}
+        {data.ai_advice && (
+          <View style={[s.aiCard, { backgroundColor: colors.card, borderColor: colors.primary + '33' }]}>
+            <Text style={[s.aiLabel, { color: colors.primary }]}>🧠 AI Advisor</Text>
+            <Text style={[s.aiText, { color: colors.text }]}>{data.ai_advice}</Text>
+          </View>
+        )}
         {tab === 'warnings' && data.warnings?.map((w, i) => (
-          <View key={i} style={s.warningCard}>
+          <View key={i} style={[s.warningCard, { backgroundColor: '#EF9F2711', borderColor: '#EF9F2733' }]}>
             <Text style={s.warningTitle}>⚠️ {w.category}</Text>
-            <Text style={s.warningText}>Spent {w.current_spend?.toLocaleString()} vs avg {w.average_spend?.toLocaleString()} ({w.percent_over}% over)</Text>
+            <Text style={[s.warningText, { color: colors.textSecondary }]}>Spent {w.current_spend?.toLocaleString()} vs avg {w.average_spend?.toLocaleString()} ({w.percent_over}% over)</Text>
           </View>
         ))}
         {tab === 'fixed-detector' && data.detected?.map((d, i) => (
-          <View key={i} style={s.detectedCard}>
-            <Text style={s.detectedTitle}>📌 {d.category}</Text>
-            <Text style={s.detectedText}>{d.message}</Text>
+          <View key={i} style={[s.detectedCard, { backgroundColor: colors.primary + '11', borderColor: colors.primary + '33' }]}>
+            <Text style={[s.detectedTitle, { color: colors.primary }]}>📌 {d.category}</Text>
+            <Text style={[s.detectedText, { color: colors.textSecondary }]}>{d.message}</Text>
           </View>
         ))}
         {tab === 'accidental-average' && data.monthly_average !== undefined && (
-          <View style={s.section}>
-            <View style={s.statRow}>
-              <Text style={s.statLabel}>Monthly Average</Text>
-              <Text style={s.statVal}>{data.monthly_average?.toLocaleString()}</Text>
-            </View>
-            <View style={s.statRow}>
-              <Text style={s.statLabel}>Recommended Buffer</Text>
-              <Text style={[s.statVal, { color: '#EF9F27' }]}>{data.recommended_buffer?.toLocaleString()}</Text>
-            </View>
-            <View style={s.statRow}>
-              <Text style={s.statLabel}>Months Tracked</Text>
-              <Text style={s.statVal}>{data.months_tracked}</Text>
-            </View>
+          <View style={[s.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            {[
+              { label: 'Monthly Average', val: data.monthly_average?.toLocaleString(), color: colors.text },
+              { label: 'Recommended Buffer', val: data.recommended_buffer?.toLocaleString(), color: '#EF9F27' },
+              { label: 'Months Tracked', val: data.months_tracked, color: colors.text },
+            ].map((row, i) => (
+              <View key={i} style={[s.statRow, { borderBottomColor: colors.border }]}>
+                <Text style={[s.statLabel, { color: colors.textSecondary }]}>{row.label}</Text>
+                <Text style={[s.statVal, { color: row.color }]}>{row.val}</Text>
+              </View>
+            ))}
           </View>
         )}
       </View>
@@ -113,14 +109,11 @@ export default function AdvisorScreen() {
   };
 
   return (
-    <View style={s.container}>
+    <View style={[s.container, { backgroundColor: colors.background }]}>
       <View style={s.header}>
-        <Text style={s.title}>AI Advisor</Text>
+        <Text style={[s.title, { color: colors.text }]}>AI Advisor</Text>
       </View>
-      <ScrollView
-        horizontal showollIndicator={false}
-        style={s.tabsScroll} contentContainerStyle={s.tabs}
-      >
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.tabsScroll} contentContainerStyle={s.tabs}>
         {[
           { key: 'suggestions', label: '💡 Suggestions' },
           { key: 'warnings', label: '⚠️ Warnings' },
@@ -128,14 +121,14 @@ export default function AdvisorScreen() {
           { key: 'accidental-average', label: '🚨 Accidentals' },
           { key: 'chat', label: '💬 Chat' },
         ].map(t => (
-          <TouchableOpacity key={t.key} style={[s.tabBtn, tab === t.key && s.tabActive]} onPress={() => setTab(t.key)}>
-            <Text style={[s.tabText, tab === t.key && { color: '#fff' }]}>{t.label}</Text>
+          <TouchableOpacity key={t.key} style={[s.tabBtn, { backgroundColor: colors.card, borderColor: colors.border }, tab === t.key && { backgroundColor: colors.primary, borderColor: colors.primary }]} onPress={() => setTab(t.key)}>
+            <Text style={[s.tabText, { color: colors.textSecondary }, tab === t.key && { color: '#fff' }]}>{t.label}</Text>
           </TouchableOpacity>
         ))}
       </ScrollView>
       <ScrollView
         style={s.scroll}
-        refreshControl={tab !== 'chat' ? <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor="#378ADD" /> : undefined}
+        refreshControl={tab !== 'chat' ? <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor={colors.primary} /> : undefined}
       >
         {renderContent()}
         <View style={{ height: 100 }} />
@@ -145,35 +138,34 @@ export default function AdvisorScreen() {
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0D1117' },
+  container: { flex: 1 },
   header: { padding: 20, paddingTop: 56 },
-  title: { fontSize: 24, fontWeight: '700', color: '#E6EDF3' },
+  title: { fontSize: 24, fontWeight: '700' },
   tabsScroll: { maxHeight: 50 },
   tabs: { paddingHorizontal: 20, gap: 8, paddingBottom: 8 },
-  tabBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: '#161B22', borderWidth: 1, borderColor: '#21262D' },
-  tabActive: { backgroundColor: '#378ADD', borderColor: '#378ADD' },
-  tabText: { fontSize: 13, color: '#8B949E', fontWeight: '500', whiteSpace: 'nowrap' },
+  tabBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
+  tabText: { fontSize: 13, fontWeight: '500' },
   scroll: { flex: 1, paddingHorizontal: 20, paddingTop: 12 },
-  aiCard: { backgroundColor: '#161B22', borderRadius: 12, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#378ADD33' },
-  aiLabel: { fontSize: 12, color: '#378ADD', fontWeight: '600', marginBottom: 8 },
-  aiText: { fontSize: 14, color: '#E6EDF3', lineHeight: 22 },
-  warningCard: { backgroundColor: '#EF9F2711', borderRadius: 12, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: '#EF9F2733' },
+  aiCard: { borderRadius: 12, padding: 16, marginBottom: 16, borderWidth: 1 },
+  aiLabel: { fontSize: 12, fontWeight: '600', marginBottom: 8 },
+  aiText: { fontSize: 14, lineHeight: 22 },
+  warningCard: { borderRadius: 12, padding: 16, marginBottom: 10, borderWidth: 1 },
   warningTitle: { fontSize: 15, fontWeight: '600', color: '#EF9F27', marginBottom: 6 },
-  warningText: { fontSize: 13, color: '#8B949E' },
-  detectedCard: { backgroundColor: '#378ADD11', borderRadius: 12, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: '#378ADD33' },
-  detectedTitle: { fontSize: 15, fontWeight: '600', color: '#378ADD', marginBottom: 6 },
-  detectedText: { fontSize: 13, color: '#8B949E' },
-  section: { backgroundColor: '#161B22', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#21262D' },
-  statRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#21262D' },
-  statLabel: { fontSize: 14, color: '#8B949E' },
-  statVal: { fontSize: 14, color: '#E6EDF3', fontWeight: '600' },
-  empty: { color: '#8B949E', textAlign: 'center', marginTop: 60, fontSize: 16 },
-  chatTitle: { fontSize: 14, color: '#8B949E', marginBottom: 16 },
+  warningText: { fontSize: 13 },
+  detectedCard: { borderRadius: 12, padding: 16, marginBottom: 10, borderWidth: 1 },
+  detectedTitle: { fontSize: 15, fontWeight: '600', marginBottom: 6 },
+  detectedText: { fontSize: 13 },
+  section: { borderRadius: 12, padding: 16, borderWidth: 1 },
+  statRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: 1 },
+  statLabel: { fontSize: 14 },
+  statVal: { fontSize: 14, fontWeight: '600' },
+  empty: { textAlign: 'center', marginTop: 60, fontSize: 16 },
+  chatTitle: { fontSize: 14, marginBottom: 16 },
   chatRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-  chatInput: { flex: 1, backgroundColor: '#161B22', borderWidth: 1, borderColor: '#21262D', borderRadius: 12, padding: 14, fontSize: 14, color: '#E6EDF3', maxHeight: 100 },
-  sendBtn: { backgroundColor: '#378ADD', borderRadius: 12, width: 50, justifyContent: 'center', alignItems: 'center' },
+  chatInput: { flex: 1, borderWidth: 1, borderRadius: 12, padding: 14, fontSize: 14, maxHeight: 100 },
+  sendBtn: { borderRadius: 12, width: 50, justifyContent: 'center', alignItems: 'center' },
   sendText: { color: '#fff', fontSize: 20, fontWeight: '700' },
   suggestions: { gap: 8 },
-  suggBtn: { backgroundColor: '#161B22', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#21262D' },
-  suggText: { fontSize: 13, color: '#8B949E' },
+  suggBtn: { borderRadius: 10, padding: 12, borderWidth: 1 },
+  suggText: { fontSize: 13 },
 });
