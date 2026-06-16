@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
+
+# Import all routers
 from routes.transactions import router as transactions_router
 from routes.auth import router as auth_router
 from routes.reports import router as reports_router
@@ -8,6 +10,7 @@ from routes.currency import router as currency_router
 from routes.advisor import router as advisor_router
 from routes.budget import router as budget_router
 from routes.otp import router as otp_router
+
 load_dotenv()
 
 app = FastAPI(
@@ -24,32 +27,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(auth_router,
-                   prefix="/auth",
-                   tags=["Auth"])
-
-app.include_router(transactions_router,
-                   prefix="/transactions",
-                   tags=["Transactions"])
-
-app.include_router(reports_router,
-                   prefix="/reports",
-                   tags=["Reports"])
-
-app.include_router(currency_router,
-                   prefix="/currency",
-                   tags=["Currency"])
-
-app.include_router(advisor_router,
-                   prefix="/advisor",
-                   tags=["AI Advisor"])
-
-app.include_router(budget_router,
-                   prefix="/budget",
-                   tags=["Budget & Goals"])
-
-app.include_router(otp_router)
-
+# Include routers with correct prefixes
+app.include_router(auth_router, prefix="/auth", tags=["Auth"])
+app.include_router(otp_router, prefix="/auth", tags=["Auth"])   # ← Fixed here
+app.include_router(transactions_router, prefix="/transactions", tags=["Transactions"])
+app.include_router(reports_router, prefix="/reports", tags=["Reports"])
+app.include_router(currency_router, prefix="/currency", tags=["Currency"])
+app.include_router(advisor_router, prefix="/advisor", tags=["AI Advisor"])
+app.include_router(budget_router, prefix="/budget", tags=["Budget & Goals"])
 
 @app.get("/")
 def root():
@@ -58,7 +43,6 @@ def root():
         "version": "0.5.0",
         "status": "running"
     }
-
 
 @app.get("/health")
 def health():
