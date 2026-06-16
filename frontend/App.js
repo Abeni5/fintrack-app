@@ -10,8 +10,15 @@ import * as Notifications from 'expo-notifications';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
 import { registerForNotifications } from './src/notifications/notificationService';
+import {
+  registerScheduledNotifications,
+  unregisterScheduledNotifications,
+} from './src/notifications/scheduledNotifications';
+
+// Screens
 import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
+import OTPVerificationScreen from './src/screens/OTPVerificationScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
 import TransactionsScreen from './src/screens/TransactionsScreen';
 import AddTransactionScreen from './src/screens/AddTransactionScreen';
@@ -28,11 +35,8 @@ const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
 const ICONS = {
-  Dashboard: '🏠',
-  Transactions: '💸',
-  Reports: '📊',
-  Advisor: '🧠',
-  Settings: '⚙️',
+  Dashboard: '🏠', Transactions: '💸',
+  Reports: '📊', Advisor: '🧠', Settings: '⚙️',
 };
 
 function MainTabs() {
@@ -48,8 +52,7 @@ function MainTabs() {
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
-          paddingBottom: 8,
-          height: 60,
+          paddingBottom: 8, height: 60,
         },
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textSecondary,
@@ -68,6 +71,14 @@ function MainTabs() {
 function RootNavigator() {
   const { user, loading } = useAuth();
   const { colors, isDark } = useTheme();
+
+  useEffect(() => {
+    if (user) {
+      registerScheduledNotifications();
+    } else if (!loading) {
+      unregisterScheduledNotifications();
+    }
+  }, [user, loading]);
 
   if (loading) return (
     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
@@ -92,6 +103,8 @@ function RootNavigator() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="Register" component={RegisterScreen} />
+      {/* OTPVerification is outside auth so unverified users can access it */}
+      <Stack.Screen name="OTPVerification" component={OTPVerificationScreen} />
     </Stack.Navigator>
   );
 }
@@ -101,21 +114,16 @@ function AppContent() {
   const notificationListener = useRef();
   const responseListener = useRef();
 
-  // Request permission on first launch
   useEffect(() => {
     registerForNotifications().then(granted => {
       if (!granted) console.log('Notification permission denied');
     });
   }, []);
 
-  // SDK 54 fix: use subscription.remove() instead of removeNotificationSubscription()
   useEffect(() => {
     notificationListener.current = Notifications.addNotificationReceivedListener(
-      notification => {
-        console.log('Notification received:', notification.request.content.title);
-      }
+      notification => console.log('Notification:', notification.request.content.title)
     );
-
     responseListener.current = Notifications.addNotificationResponseReceivedListener(
       response => {
         const screen = response.notification.request.content.data?.screen;
@@ -124,8 +132,6 @@ function AppContent() {
         }
       }
     );
-
-    // SDK 54: call .remove() directly on the subscription object
     return () => {
       notificationListener.current?.remove();
       responseListener.current?.remove();
