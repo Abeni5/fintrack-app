@@ -29,7 +29,7 @@ app.add_middleware(
 
 # Include routers with correct prefixes
 app.include_router(auth_router, prefix="/auth", tags=["Auth"])
-app.include_router(otp_router, prefix="/auth", tags=["Auth"])   # ← Fixed here
+app.include_router(otp_router)   # ← Fixed here
 app.include_router(transactions_router, prefix="/transactions", tags=["Transactions"])
 app.include_router(reports_router, prefix="/reports", tags=["Reports"])
 app.include_router(currency_router, prefix="/currency", tags=["Currency"])

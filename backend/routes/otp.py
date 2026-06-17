@@ -1,48 +1,41 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # routes/otp.py
+# Rewritten to match your actual architecture: SQLAlchemy + raw SQL against
+# your Postgres database (same as auth.py) — NOT the Supabase REST client.
+#
+# pip install requests
+#
+# Add to your .env file:
+# BREVO_API_KEY=your_new_regenerated_key
+# BREVO_SENDER_EMAIL=your_verified_email@gmail.com
+# BREVO_SENDER_NAME=FinTrack
 # ─────────────────────────────────────────────────────────────────────────────
 
 import os
 import random
 import string
-from datetime import datetime, timedelta
-
 import requests
-from dotenv import load_dotenv
-from fastapi import APIRouter, HTTPException
+from datetime import datetime, timedelta
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, EmailStr
-from supabase import create_client, Client
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from database import get_db
 
-# Load environment variables FIRST
-load_dotenv()
+router = APIRouter(prefix="/auth", tags=["auth"])
 
-# ── Config ──────────────────────────────────────────────────────────────────
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 BREVO_API_KEY = os.getenv("BREVO_API_KEY")
 BREVO_SENDER_EMAIL = os.getenv("BREVO_SENDER_EMAIL")
 BREVO_SENDER_NAME = os.getenv("BREVO_SENDER_NAME", "FinTrack")
 
-# Validate required variables
-if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
-    raise RuntimeError("❌ Missing SUPABASE_URL or SUPABASE_SERVICE_KEY in .env file")
-
-if not BREVO_API_KEY or not BREVO_SENDER_EMAIL:
-    raise RuntimeError("❌ Missing BREVO_API_KEY or BREVO_SENDER_EMAIL in .env file")
-
-# Create Supabase client once
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-
-router = APIRouter(prefix="/auth", tags=["auth"])
-
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
-def generate_otp(length: int = 6) -> str:
+def generate_otp(length=6):
     return ''.join(random.choices(string.digits, k=length))
 
 
 def send_otp_email(to_email: str, to_name: str, otp: str):
-    """Send OTP via Brevo (Sendinblue) API"""
+    """Send OTP via Brevo API"""
     url = "https://api.brevo.com/v3/smtp/email"
     headers = {
         "accept": "application/json",
@@ -65,18 +58,15 @@ def send_otp_email(to_email: str, to_name: str, otp: str):
           </div>
           <p style="color:#888;font-size:13px;">This code expires in <strong>10 minutes</strong>.</p>
           <p style="color:#888;font-size:13px;">If you didn't create a FinTrack account, ignore this email.</p>
-          <hr style="border:none;border-top:1px solid #eee;margin-top:24px;">
-          <p style="color:#bbb;font-size:12px;text-align:center;">FinTrack — Personal Finance App</p>
         </div>
         """,
     }
     response = requests.post(url, json=payload, headers=headers)
     if response.status_code not in (200, 201):
-        raise Exception(f"Brevo API error: {response.text}")
+        raise Exception(f"Brevo error: {response.text}")
     return True
 
-
-# ── Pydantic Models ─────────────────────────────────────────────────────────
+# ── Pydantic models ───────────────────────────────────────────────────────────
 
 class SendOTPRequest(BaseModel):
     email: EmailStr
@@ -90,82 +80,138 @@ class ResendOTPRequest(BaseModel):
     email: EmailStr
     name: str = "User"
 
+# ── Ensure otp_codes table exists (runs once on first import) ────────────────
+# This avoids needing to manually run SQL in Supabase — it self-creates.
 
-# ── Endpoints ───────────────────────────────────────────────────────────────
+def ensure_otp_table(db: Session):
+    db.execute(text("""
+        CREATE TABLE IF NOT EXISTS otp_codes (
+            id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+            email TEXT NOT NULL,
+            code TEXT NOT NULL,
+            expires_at TIMESTAMP NOT NULL,
+            used BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    """))
+    db.commit()
+
+
+def ensure_verified_column(db: Session):
+    db.execute(text("""
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE
+    """))
+    db.commit()
+
+# ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.post("/send-otp")
-async def send_otp(req: SendOTPRequest):
-    # Delete old unused OTPs
-    supabase.table("otp_codes").delete().eq("email", req.email).eq("used", False).execute()
+def send_otp(req: SendOTPRequest, db: Session = Depends(get_db)):
+    ensure_otp_table(db)
+    ensure_verified_column(db)
+
+    # Confirm the user actually exists in YOUR users table
+    user = db.execute(
+        text("SELECT id FROM users WHERE email = :email"),
+        {"email": req.email}
+    ).fetchone()
+    if not user:
+        raise HTTPException(status_code=404, detail="No account found with this email")
+
+    # Delete old unused OTPs for this email
+    db.execute(
+        text("DELETE FROM otp_codes WHERE email = :email AND used = FALSE"),
+        {"email": req.email}
+    )
 
     otp = generate_otp()
-    expires_at = (datetime.utcnow() + timedelta(minutes=10)).isoformat()
+    expires_at = datetime.utcnow() + timedelta(minutes=10)
 
-    supabase.table("otp_codes").insert({
+    db.execute(text("""
+        INSERT INTO otp_codes (email, code, expires_at, used)
+        VALUES (:email, :code, :expires_at, FALSE)
+    """), {
         "email": req.email,
         "code": otp,
         "expires_at": expires_at,
-        "used": False,
-    }).execute()
+    })
+    db.commit()
 
     try:
         send_otp_email(req.email, req.name, otp)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to send OTP email: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
 
     return {"message": "OTP sent successfully", "expires_in_minutes": 10}
 
 
 @router.post("/verify-otp")
-async def verify_otp(req: VerifyOTPRequest):
-    result = supabase.table("otp_codes") \
-        .select("*") \
-        .eq("email", req.email) \
-        .eq("code", req.code) \
-        .eq("used", False) \
-        .execute()
+def verify_otp(req: VerifyOTPRequest, db: Session = Depends(get_db)):
+    ensure_otp_table(db)
+    ensure_verified_column(db)
 
-    if not result.data:
-        raise HTTPException(status_code=400, detail="Invalid or expired OTP")
+    record = db.execute(text("""
+        SELECT * FROM otp_codes
+        WHERE email = :email AND code = :code AND used = FALSE
+        ORDER BY created_at DESC LIMIT 1
+    """), {"email": req.email, "code": req.code}).fetchone()
 
-    otp_record = result.data[0]
+    if not record:
+        raise HTTPException(status_code=400, detail="Invalid or expired OTP code")
 
-    # Check expiration
-    expires_at = datetime.fromisoformat(otp_record["expires_at"].replace("Z", "+00:00"))
-    if datetime.utcnow() > expires_at:
-        raise HTTPException(status_code=400, detail="OTP has expired")
+    if datetime.utcnow() > record.expires_at:
+        raise HTTPException(status_code=400, detail="OTP has expired. Request a new one.")
 
     # Mark OTP as used
-    supabase.table("otp_codes").update({"used": True}).eq("id", otp_record["id"]).execute()
+    db.execute(
+        text("UPDATE otp_codes SET used = TRUE WHERE id = :id"),
+        {"id": record.id}
+    )
 
-    # Mark user as verified
-    supabase.table("users").update({"is_verified": True}).eq("email", req.email).execute()
+    # Mark user as verified in YOUR users table
+    result = db.execute(
+        text("UPDATE users SET is_verified = TRUE WHERE email = :email"),
+        {"email": req.email}
+    )
+    db.commit()
+
+    if result.rowcount == 0:
+        raise HTTPException(status_code=404, detail="User not found")
 
     return {"message": "Email verified successfully", "verified": True}
 
 
 @router.post("/resend-otp")
-async def resend_otp(req: ResendOTPRequest):
-    # Anti-spam: check last OTP sent
-    recent = supabase.table("otp_codes") \
-        .select("created_at") \
-        .eq("email", req.email) \
-        .eq("used", False) \
-        .order("created_at", desc=True) \
-        .limit(1) \
-        .execute()
+def resend_otp(req: ResendOTPRequest, db: Session = Depends(get_db)):
+    ensure_otp_table(db)
 
-    if recent.data:
-        last_sent = datetime.fromisoformat(recent.data[0]["created_at"].replace("Z", "+00:00"))
-        if (datetime.utcnow() - last_sent).total_seconds() < 30:
-            raise HTTPException(status_code=429, detail="Please wait before requesting a new code")
+    recent = db.execute(text("""
+        SELECT created_at FROM otp_codes
+        WHERE email = :email AND used = FALSE
+        ORDER BY created_at DESC LIMIT 1
+    """), {"email": req.email}).fetchone()
 
-    return await send_otp(SendOTPRequest(email=req.email, name=req.name))
+    if recent:
+        seconds_ago = (datetime.utcnow() - recent.created_at).total_seconds()
+        if seconds_ago < 30:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Please wait {int(30 - seconds_ago)} seconds before requesting a new code"
+            )
+
+    return send_otp(SendOTPRequest(email=req.email, name=req.name), db)
 
 
 @router.get("/check-verified/{email}")
-async def check_verified(email: str):
-    result = supabase.table("users").select("is_verified").eq("email", email).execute()
-    if not result.data:
+def check_verified(email: str, db: Session = Depends(get_db)):
+    ensure_verified_column(db)
+
+    user = db.execute(
+        text("SELECT is_verified FROM users WHERE email = :email"),
+        {"email": email}
+    ).fetchone()
+
+    if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    return {"is_verified": result.data[0].get("is_verified", False)}
+
+    return {"is_verified": bool(user.is_verified)}
