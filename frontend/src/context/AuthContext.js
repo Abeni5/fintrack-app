@@ -1,6 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../api/client';
+import { getToken, setToken as saveToken, getUser, setUser as saveUser, clearAuth } from '../utils/secureStorage';
 
 const AuthContext = createContext();
 
@@ -13,11 +13,11 @@ export const AuthProvider = ({ children }) => {
 
   const loadStoredAuth = async () => {
     try {
-      const storedToken = await AsyncStorage.getItem('token');
-      const storedUser = await AsyncStorage.getItem('user');
+      const storedToken = await getToken();
+      const storedUser = await getUser();
       if (storedToken && storedUser) {
         setToken(storedToken);
-        setUser(JSON.parse(storedUser));
+        setUser(storedUser);
       }
     } catch (e) {
       console.log('Error loading auth:', e);
@@ -29,28 +29,27 @@ export const AuthProvider = ({ children }) => {
   const login = async (email, password) => {
     const response = await api.post('/auth/login', { email, password });
     const { access_token, user: userData } = response.data;
-    await AsyncStorage.setItem('token', access_token);
-    await AsyncStorage.setItem('user', JSON.stringify(userData));
+    await saveToken(access_token);
+    await saveUser(userData);
     setToken(access_token);
     setUser(userData);
     return userData;
   };
 
+  // NOTE: register() no longer stores a token or logs the user in.
+  // With OTP verification, the user must verify their email first.
+  // RegisterScreen.js navigates to OTPVerification after this resolves,
+  // and the user logs in normally afterward via LoginScreen.
   const register = async (name, email, password, currency = 'ETB') => {
     const response = await api.post('/auth/register', {
       name, email, password, default_currency: currency
     });
-    const { access_token, user: userData } = response.data;
-    await AsyncStorage.setItem('token', access_token);
-    await AsyncStorage.setItem('user', JSON.stringify(userData));
-    setToken(access_token);
-    setUser(userData);
-    return userData;
+    // Intentionally NOT storing token/user here — see note above
+    return response.data.user;
   };
 
   const logout = async () => {
-    await AsyncStorage.removeItem('token');
-    await AsyncStorage.removeItem('user');
+    await clearAuth();
     setToken(null);
     setUser(null);
   };
