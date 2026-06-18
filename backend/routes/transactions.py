@@ -48,6 +48,11 @@ def create_transaction(
     return row_to_dict(result.fetchone())
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Replace the existing /summary endpoint in backend/routes/transactions.py
+# with this version. It correctly separates ETB and USD transactions.
+# ─────────────────────────────────────────────────────────────────────────────
+
 @router.get("/summary")
 def get_summary(
     db: Session = Depends(get_db),
@@ -55,21 +60,60 @@ def get_summary(
 ):
     result = db.execute(text("""
         SELECT
-          COALESCE(SUM(CASE WHEN type='income'
-            THEN amount ELSE 0 END), 0) AS total_income,
-          COALESCE(SUM(CASE WHEN type='expense'
-            THEN amount ELSE 0 END), 0) AS total_expense,
-          COALESCE(SUM(CASE WHEN cost_type='fixed'
-            THEN amount ELSE 0 END), 0) AS fixed_costs,
-          COALESCE(SUM(CASE WHEN cost_type='accidental'
-            THEN amount ELSE 0 END), 0) AS accidental_costs,
+          currency,
+          COALESCE(SUM(CASE WHEN type='income' THEN amount ELSE 0 END), 0) AS total_income,
+          COALESCE(SUM(CASE WHEN type='expense' THEN amount ELSE 0 END), 0) AS total_expense,
+          COALESCE(SUM(CASE WHEN cost_type='fixed' THEN amount ELSE 0 END), 0) AS fixed_costs,
+          COALESCE(SUM(CASE WHEN cost_type='accidental' THEN amount ELSE 0 END), 0) AS accidental_costs,
           COUNT(*) AS total_count
         FROM transactions
         WHERE user_id = :user_id
+        GROUP BY currency
     """), {"user_id": current_user["id"]})
-    row = dict(result.fetchone()._mapping)
-    row["balance"] = float(row["total_income"]) - float(row["total_expense"])
-    return row
+
+    rows = result.fetchall()
+
+    # Initialize both currencies at zero in case one has no transactions yet
+    etb = {"total_income": 0, "total_expense": 0, "fixed_costs": 0, "accidental_costs": 0, "total_count": 0}
+    usd = {"total_income": 0, "total_expense": 0, "fixed_costs": 0, "accidental_costs": 0, "total_count": 0}
+
+    for row in rows:
+        data = dict(row._mapping)
+        currency = data.pop("currency")
+        values = {k: float(v) if k != "total_count" else int(v) for k, v in data.items()}
+        if currency == "ETB":
+            etb.update(values)
+        elif currency == "USD":
+            usd.update(values)
+
+    # Combined totals across both currencies — for backward compatibility only.
+    # NOTE: this mixed total is NOT meaningful for display (different currencies
+    # summed together) and is kept only so older code that reads `summary.balance`
+    # doesn't crash. The frontend should use balance_etb / balance_usd instead.
+    combined_income = etb["total_income"] + usd["total_income"]
+    combined_expense = etb["total_expense"] + usd["total_expense"]
+
+    return {
+        # Per-currency breakdown — USE THESE in the frontend
+        "balance_etb": etb["total_income"] - etb["total_expense"],
+        "total_income_etb": etb["total_income"],
+        "total_expense_etb": etb["total_expense"],
+        "fixed_costs_etb": etb["fixed_costs"],
+        "accidental_costs_etb": etb["accidental_costs"],
+
+        "balance_usd": usd["total_income"] - usd["total_expense"],
+        "total_income_usd": usd["total_income"],
+        "total_expense_usd": usd["total_expense"],
+        "fixed_costs_usd": usd["fixed_costs"],
+        "accidental_costs_usd": usd["accidental_costs"],
+
+        # Legacy combined fields (kept for compatibility, not currency-accurate)
+        "balance": combined_income - combined_expense,
+        "total_income": combined_income,
+        "total_expense": combined_expense,
+        "fixed_costs": etb["fixed_costs"] + usd["fixed_costs"],
+        "accidental_costs": etb["accidental_costs"] + usd["accidental_costs"],
+    }
 
 
 @router.get("/", response_model=List[TransactionOut])
