@@ -46,17 +46,7 @@ def send_otp_email(to_email: str, to_name: str, otp: str):
         </div>
         """,
     }
-
-    # DEBUG: print env vars (masked) and full Brevo response to Render logs
-    print(f"[OTP DEBUG] Sender email: {BREVO_SENDER_EMAIL}")
-    print(f"[OTP DEBUG] API key present: {bool(BREVO_API_KEY)}, length: {len(BREVO_API_KEY) if BREVO_API_KEY else 0}")
-    print(f"[OTP DEBUG] Sending to: {to_email}")
-
     response = requests.post(url, json=payload, headers=headers)
-
-    print(f"[OTP DEBUG] Brevo status code: {response.status_code}")
-    print(f"[OTP DEBUG] Brevo response body: {response.text}")
-
     if response.status_code not in (200, 201):
         raise Exception(f"Brevo error: {response.text}")
     return True
@@ -127,12 +117,9 @@ def send_otp(req: SendOTPRequest, db: Session = Depends(get_db)):
     })
     db.commit()
 
-    print(f"[OTP DEBUG] Generated OTP {otp} for {req.email}")  # remove after debugging
-
     try:
         send_otp_email(req.email, req.name, otp)
     except Exception as e:
-        print(f"[OTP DEBUG] send_otp_email raised: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
 
     return {"message": "OTP sent successfully", "expires_in_minutes": 10}
